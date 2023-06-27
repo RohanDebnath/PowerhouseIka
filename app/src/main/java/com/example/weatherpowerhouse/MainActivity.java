@@ -51,9 +51,27 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
         weatherTextView = findViewById(R.id.weatherTextView);
 
         sharedPreferences = getSharedPreferences(PREFERENCE_NAME, Context.MODE_PRIVATE);
+
+        // Retrieve and display the last fetched weather information
         String savedLocation = sharedPreferences.getString(PREFERENCE_LOCATION_KEY, null);
         if (savedLocation != null) {
             locationTextView.setText(savedLocation);
+            float savedTemperature = sharedPreferences.getFloat("temperature", 0.0f);
+            int savedHumidity = sharedPreferences.getInt("humidity", 0);
+            int savedPressure = sharedPreferences.getInt("pressure", 0);
+            float savedWindSpeed = sharedPreferences.getFloat("windSpeed", 0.0f);
+            float savedRainVolume = sharedPreferences.getFloat("rainVolume", 0.0f);
+            int savedCloudiness = sharedPreferences.getInt("cloudiness", 0);
+
+            String weatherText = "Current weather:\n" +
+                    "Temperature: " + savedTemperature + "°C\n" +
+                    "Humidity: " + savedHumidity + "%\n" +
+                    "Pressure: " + savedPressure + " hPa\n" +
+                    "Wind Speed: " + savedWindSpeed + " m/s\n" +
+                    "Rain Volume (1h): " + savedRainVolume + " mm\n" +
+                    "Cloudiness: " + savedCloudiness + "%";
+
+            weatherTextView.setText(weatherText);
         }
 
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
@@ -84,6 +102,8 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
         double latitude = location.getLatitude();
         double longitude = location.getLongitude();
 
+        reverseGeocode(latitude, longitude);
+
         String url = "https://api.openweathermap.org/data/2.5/weather?lat=" + latitude + "&lon=" + longitude + "&appid=" + API_KEY;
 
         JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
@@ -91,57 +111,50 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
                     @Override
                     public void onResponse(JSONObject response) {
                         try {
-                            String cityName = response.getString("name");
-
-                            JSONObject mainObject = response.getJSONObject("main");
-                            double temperature = mainObject.getDouble("temp");
-                            int humidity = mainObject.getInt("humidity");
-                            int pressure = mainObject.getInt("pressure");
-
-                            JSONObject windObject = response.getJSONObject("wind");
-                            double windSpeed = windObject.getDouble("speed");
-
                             JSONArray weatherArray = response.getJSONArray("weather");
                             JSONObject weatherObject = weatherArray.getJSONObject(0);
                             String description = weatherObject.getString("description");
 
+                            JSONObject mainObject = response.getJSONObject("main");
+                            float temperature = (float) (mainObject.getDouble("temp") - 273.15); // Convert temperature from Kelvin to Celsius
+                            int humidity = mainObject.getInt("humidity");
+                            int pressure = mainObject.getInt("pressure");
+
+                            JSONObject windObject = response.getJSONObject("wind");
+                            float windSpeed = (float) windObject.getDouble("speed");
+
+                            JSONObject rainObject = response.optJSONObject("rain");
+                            float rainVolume = 0.0f;
+                            if (rainObject != null && rainObject.has("1h")) {
+                                rainVolume = (float) rainObject.getDouble("1h");
+                            }
+
                             JSONObject cloudsObject = response.getJSONObject("clouds");
                             int cloudiness = cloudsObject.getInt("all");
 
-                            double rainVolume = 0.0;
-                            if (response.has("rain")) {
-                                JSONObject rainObject = response.getJSONObject("rain");
-                                if (rainObject.has("1h")) {
-                                    rainVolume = rainObject.getDouble("1h");
-                                }
-                            }
+                            String weatherText = "Current weather:\n" +
+                                    "Temperature: " + temperature + "°C\n" +
+                                    "Humidity: " + humidity + "%\n" +
+                                    "Pressure: " + pressure + " hPa\n" +
+                                    "Wind Speed: " + windSpeed + " m/s\n" +
+                                    "Rain Volume (1h): " + rainVolume + " mm\n" +
+                                    "Cloudiness: " + cloudiness + "%";
 
-                            double latitude = response.getJSONObject("coord").getDouble("lat");
-                            double longitude = response.getJSONObject("coord").getDouble("lon");
-
-                            // Perform reverse geocoding to obtain the full address
-                            String address = reverseGeocode(latitude, longitude);
-
-                            String weatherText =
-                                    "\nCurrent weather: " + description +
-                                    "\nTemperature: " + temperature + "°C" +
-                                    "\nHumidity: " + humidity + "%" +
-                                    "\nPressure: " + pressure + " hPa" +
-                                    "\nWind Speed: " + windSpeed + " m/s" +
-                                    "\nRain Volume (1h): " + rainVolume + " mm" +
-                                    "\nCloudiness: " + cloudiness + "%";
-
-                            locationTextView.setText(address);
                             weatherTextView.setText(weatherText);
 
+                            // Save the weather information to SharedPreferences
                             SharedPreferences.Editor editor = sharedPreferences.edit();
-                            editor.putString(PREFERENCE_LOCATION_KEY, address);
+                            editor.putFloat("temperature", temperature);
+                            editor.putInt("humidity", humidity);
+                            editor.putInt("pressure", pressure);
+                            editor.putFloat("windSpeed", windSpeed);
+                            editor.putFloat("rainVolume", rainVolume);
+                            editor.putInt("cloudiness", cloudiness);
                             editor.apply();
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
                     }
-
                 },
                 new Response.ErrorListener() {
                     @Override
@@ -165,30 +178,30 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
     @Override
     public void onProviderDisabled(String provider) {
     }
-    private String reverseGeocode(double latitude, double longitude) {
-        Geocoder geocoder = new Geocoder(MainActivity.this, Locale.getDefault());
-        String address = "";
 
+    private void reverseGeocode(double latitude, double longitude) {
+        Geocoder geocoder = new Geocoder(this, Locale.getDefault());
         try {
             List<Address> addresses = geocoder.getFromLocation(latitude, longitude, 1);
-            if (addresses != null && addresses.size() > 0) {
-                Address fetchedAddress = addresses.get(0);
+            if (addresses.size() > 0) {
+                Address address = addresses.get(0);
                 StringBuilder addressBuilder = new StringBuilder();
-
-                for (int i = 0; i <= fetchedAddress.getMaxAddressLineIndex(); i++) {
-                    addressBuilder.append(fetchedAddress.getAddressLine(i));
-                    if (i < fetchedAddress.getMaxAddressLineIndex()) {
+                for (int i = 0; i <= address.getMaxAddressLineIndex(); i++) {
+                    addressBuilder.append(address.getAddressLine(i));
+                    if (i < address.getMaxAddressLineIndex()) {
                         addressBuilder.append(", ");
                     }
                 }
+                String fullAddress = addressBuilder.toString();
+                locationTextView.setText(fullAddress);
 
-                address = addressBuilder.toString();
+                // Save the location to SharedPreferences
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putString(PREFERENCE_LOCATION_KEY, fullAddress);
+                editor.apply();
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        return address;
     }
-
 }
