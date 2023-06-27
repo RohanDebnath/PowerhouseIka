@@ -86,11 +86,38 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
                     public void onResponse(JSONObject response) {
                         try {
                             String cityName = response.getString("name");
+
+                            JSONObject mainObject = response.getJSONObject("main");
+                            double temperature = mainObject.getDouble("temp");
+                            int humidity = mainObject.getInt("humidity");
+                            int pressure = mainObject.getInt("pressure");
+
+                            JSONObject windObject = response.getJSONObject("wind");
+                            double windSpeed = windObject.getDouble("speed");
+
                             JSONArray weatherArray = response.getJSONArray("weather");
                             JSONObject weatherObject = weatherArray.getJSONObject(0);
                             String description = weatherObject.getString("description");
 
-                            String weatherText = "Current weather: " + description;
+                            JSONObject cloudsObject = response.getJSONObject("clouds");
+                            int cloudiness = cloudsObject.getInt("all");
+
+                            double rainVolume = 0.0;
+                            if (response.has("rain")) {
+                                JSONObject rainObject = response.getJSONObject("rain");
+                                if (rainObject.has("1h")) {
+                                    rainVolume = rainObject.getDouble("1h");
+                                }
+                            }
+
+                            String weatherText = "Current weather: " + description +
+                                    "\nTemperature: " + temperature + "°K" +
+                                    "\nHumidity: " + humidity + "%" +
+                                    "\nPressure: " + pressure + " hPa" +
+                                    "\nWind Speed: " + windSpeed + " m/s" +
+                                    "\nRain Volume (1h): " + rainVolume + " mm" +
+                                    "\nCloudiness: " + cloudiness + "%";
+
                             locationTextView.setText(cityName);
                             weatherTextView.setText(weatherText);
 
@@ -101,6 +128,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
                             e.printStackTrace();
                         }
                     }
+
                 },
                 new Response.ErrorListener() {
                     @Override
