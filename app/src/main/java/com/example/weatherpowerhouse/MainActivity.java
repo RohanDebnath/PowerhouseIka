@@ -15,11 +15,14 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
+import com.android.volley.toolbox.JsonArrayRequest;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 
@@ -28,6 +31,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -41,6 +45,13 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
     private TextView locationTextView;
     private TextView weatherTextView;
     private SharedPreferences sharedPreferences;
+    private RecyclerView recyclerView;
+    private WeatherAdapter weatherAdapter;
+    private List<Weather> weatherList;
+
+    private static final String[] CITIES = {
+            "New York", "Singapore", "Mumbai", "Delhi", "Sydney", "Melbourne"
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,29 +60,15 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
 
         locationTextView = findViewById(R.id.locationTextView);
         weatherTextView = findViewById(R.id.weatherTextView);
+        recyclerView = findViewById(R.id.cityRecyclerView);
 
         sharedPreferences = getSharedPreferences(PREFERENCE_NAME, Context.MODE_PRIVATE);
 
-        // Retrieve and display the last fetched weather information
+        // Retrieve and display the last fetched weather information for the current location
         String savedLocation = sharedPreferences.getString(PREFERENCE_LOCATION_KEY, null);
         if (savedLocation != null) {
             locationTextView.setText(savedLocation);
-            float savedTemperature = sharedPreferences.getFloat("temperature", 0.0f);
-            int savedHumidity = sharedPreferences.getInt("humidity", 0);
-            int savedPressure = sharedPreferences.getInt("pressure", 0);
-            float savedWindSpeed = sharedPreferences.getFloat("windSpeed", 0.0f);
-            float savedRainVolume = sharedPreferences.getFloat("rainVolume", 0.0f);
-            int savedCloudiness = sharedPreferences.getInt("cloudiness", 0);
-
-            String weatherText = "Current weather:\n" +
-                    "Temperature: " + savedTemperature + "°C\n" +
-                    "Humidity: " + savedHumidity + "%\n" +
-                    "Pressure: " + savedPressure + " hPa\n" +
-                    "Wind Speed: " + savedWindSpeed + " m/s\n" +
-                    "Rain Volume (1h): " + savedRainVolume + " mm\n" +
-                    "Cloudiness: " + savedCloudiness + "%";
-
-            weatherTextView.setText(weatherText);
+            weatherTextView.setText(getSavedWeatherText());
         }
 
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
@@ -82,6 +79,15 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
         } else {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, 1);
         }
+
+        weatherList = new ArrayList<>();
+        weatherAdapter = new WeatherAdapter(weatherList, this);
+
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        recyclerView.setLayoutManager(layoutManager);
+        recyclerView.setAdapter(weatherAdapter);
+
+        fetchWeatherDataForCities();
     }
 
     @Override
@@ -144,6 +150,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
 
                             // Save the weather information to SharedPreferences
                             SharedPreferences.Editor editor = sharedPreferences.edit();
+                            editor.putString(PREFERENCE_LOCATION_KEY, locationTextView.getText().toString());
                             editor.putFloat("temperature", temperature);
                             editor.putInt("humidity", humidity);
                             editor.putInt("pressure", pressure);
@@ -203,5 +210,60 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private void fetchWeatherDataForCities() {
+        for (String city : CITIES) {
+            String url = "https://api.openweathermap.org/data/2.5/weather?q=" + city + "&appid=" + API_KEY;
+
+            JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
+                    new Response.Listener<JSONObject>() {
+                        @Override
+                        public void onResponse(JSONObject response) {
+                            try {
+                                JSONArray weatherArray = response.getJSONArray("weather");
+                                JSONObject weatherObject = weatherArray.getJSONObject(0);
+                                String description = weatherObject.getString("description");
+
+                                JSONObject mainObject = response.getJSONObject("main");
+                                float temperature = (float) (mainObject.getDouble("temp") - 273.15); // Convert temperature from Kelvin to Celsius
+                                int humidity = mainObject.getInt("humidity");
+                                int pressure = mainObject.getInt("pressure");
+
+                                Weather weather = new Weather(city, description, temperature, humidity, pressure);
+                                weatherList.add(weather);
+                                weatherAdapter.notifyDataSetChanged();
+                            } catch (JSONException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    },
+                    new Response.ErrorListener() {
+                        @Override
+                        public void onErrorResponse(VolleyError error) {
+                            Toast.makeText(MainActivity.this, "Error retrieving weather data", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+
+            RequestQueue queue = Volley.newRequestQueue(this);
+            queue.add(request);
+        }
+    }
+
+    private String getSavedWeatherText() {
+        float savedTemperature = sharedPreferences.getFloat("temperature", 0.0f);
+        int savedHumidity = sharedPreferences.getInt("humidity", 0);
+        int savedPressure = sharedPreferences.getInt("pressure", 0);
+        float savedWindSpeed = sharedPreferences.getFloat("windSpeed", 0.0f);
+        float savedRainVolume = sharedPreferences.getFloat("rainVolume", 0.0f);
+        int savedCloudiness = sharedPreferences.getInt("cloudiness", 0);
+
+        return "Current weather:\n" +
+                "Temperature: " + savedTemperature + "°C\n" +
+                "Humidity: " + savedHumidity + "%\n" +
+                "Pressure: " + savedPressure + " hPa\n" +
+                "Wind Speed: " + savedWindSpeed + " m/s\n" +
+                "Rain Volume (1h): " + savedRainVolume + " mm\n" +
+                "Cloudiness: " + savedCloudiness + "%";
     }
 }
