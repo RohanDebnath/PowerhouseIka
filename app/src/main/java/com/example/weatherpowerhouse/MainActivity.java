@@ -10,6 +10,8 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -48,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
     private RecyclerView recyclerView;
     private WeatherAdapter weatherAdapter;
     private List<Weather> weatherList;
+    private ProgressBar progressBar;
 
     private static final String[] CITIES = {
             "New York", "Singapore", "Mumbai", "Delhi", "Sydney", "Melbourne"
@@ -61,6 +64,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
         locationTextView = findViewById(R.id.locationTextView);
         weatherTextView = findViewById(R.id.weatherTextView);
         recyclerView = findViewById(R.id.cityRecyclerView);
+        progressBar=findViewById(R.id.progressBar);
 
         sharedPreferences = getSharedPreferences(PREFERENCE_NAME, Context.MODE_PRIVATE);
 
@@ -111,7 +115,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
         reverseGeocode(latitude, longitude);
 
         String url = "https://api.openweathermap.org/data/2.5/weather?lat=" + latitude + "&lon=" + longitude + "&appid=" + API_KEY;
-
+        progressBar.setVisibility(View.VISIBLE);
         JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
                 new Response.Listener<JSONObject>() {
                     @Override
@@ -161,6 +165,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
+                        progressBar.setVisibility(View.GONE);
                     }
                 },
                 new Response.ErrorListener() {
