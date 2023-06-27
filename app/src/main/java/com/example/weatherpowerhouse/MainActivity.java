@@ -4,6 +4,8 @@ import android.Manifest;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -24,6 +26,10 @@ import com.android.volley.toolbox.Volley;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity implements LocationListener {
 
@@ -110,19 +116,26 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
                                 }
                             }
 
-                            String weatherText = "Current weather: " + description +
-                                    "\nTemperature: " + temperature + "°K" +
+                            double latitude = response.getJSONObject("coord").getDouble("lat");
+                            double longitude = response.getJSONObject("coord").getDouble("lon");
+
+                            // Perform reverse geocoding to obtain the full address
+                            String address = reverseGeocode(latitude, longitude);
+
+                            String weatherText =
+                                    "\nCurrent weather: " + description +
+                                    "\nTemperature: " + temperature + "°C" +
                                     "\nHumidity: " + humidity + "%" +
                                     "\nPressure: " + pressure + " hPa" +
                                     "\nWind Speed: " + windSpeed + " m/s" +
                                     "\nRain Volume (1h): " + rainVolume + " mm" +
                                     "\nCloudiness: " + cloudiness + "%";
 
-                            locationTextView.setText(cityName);
+                            locationTextView.setText(address);
                             weatherTextView.setText(weatherText);
 
                             SharedPreferences.Editor editor = sharedPreferences.edit();
-                            editor.putString(PREFERENCE_LOCATION_KEY, cityName);
+                            editor.putString(PREFERENCE_LOCATION_KEY, address);
                             editor.apply();
                         } catch (JSONException e) {
                             e.printStackTrace();
@@ -152,4 +165,30 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
     @Override
     public void onProviderDisabled(String provider) {
     }
+    private String reverseGeocode(double latitude, double longitude) {
+        Geocoder geocoder = new Geocoder(MainActivity.this, Locale.getDefault());
+        String address = "";
+
+        try {
+            List<Address> addresses = geocoder.getFromLocation(latitude, longitude, 1);
+            if (addresses != null && addresses.size() > 0) {
+                Address fetchedAddress = addresses.get(0);
+                StringBuilder addressBuilder = new StringBuilder();
+
+                for (int i = 0; i <= fetchedAddress.getMaxAddressLineIndex(); i++) {
+                    addressBuilder.append(fetchedAddress.getAddressLine(i));
+                    if (i < fetchedAddress.getMaxAddressLineIndex()) {
+                        addressBuilder.append(", ");
+                    }
+                }
+
+                address = addressBuilder.toString();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return address;
+    }
+
 }
